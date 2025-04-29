@@ -1,0 +1,6 @@
+*.png
+
+# Ignoring raw data and image files of figures
+*.csv
+
+old
