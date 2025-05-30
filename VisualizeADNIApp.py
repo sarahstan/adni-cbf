@@ -58,9 +58,24 @@ def plot_distribution_by_diagnosis_plotly(df_filtered, data_column):
         height=500,
         width=800
     )
+    # Create ordered statistics dataframe
+    stats_data = []
+    for dx in diagnosis_order:
+        subset = df_filtered[df_filtered['DX'] == dx]
+        values = subset[data_column].dropna()
+        if len(values) > 0:
+            stats = values.describe().to_dict()
+            stats['diagnosis'] = dx
+            stats_data.append(stats)
     
-    # Return the figure object
-    return fig
+    # Convert to DataFrame and set index to maintain order
+    if stats_data:
+        stats_df = pd.DataFrame(stats_data)
+        stats_df.set_index('diagnosis', inplace=True)
+    else:
+        stats_df = pd.DataFrame()
+    
+    return fig, stats_df
 
 def plot_diagnosis_comparison_plotly(df_filtered, data_column, error_type='std'):
     """
@@ -179,25 +194,24 @@ def plot_diagnosis_comparison_plotly(df_filtered, data_column, error_type='std')
     fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.1)')
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.1)')
     
-    # Create a table of summary statistics to return alongside the chart
-    summary_stats = {}
-    for s in stats:
-        if s['n'] > 0:
-            summary_stats[s['dx']] = {
-                'n': s['n'],
-                'Mean': round(s['mean'], 2),
-                'SEM': round(s['sem'], 2),
-                'SD': round(s['std'], 2)
-            }
-        else:
-            summary_stats[s['dx']] = {
-                'n': 0,
-                'Mean': 'No valid data',
-                'SEM': 'No valid data',
-                'SD': 'No valid data'
-            }
+    # Create ordered statistics dataframe
+    stats_data = []
+    for dx in diagnosis_order:
+        subset = df_filtered[df_filtered['DX'] == dx]
+        values = subset[data_column].dropna()
+        if len(values) > 0:
+            stats = values.describe().to_dict()
+            stats['diagnosis'] = dx
+            stats_data.append(stats)
     
-    return fig, summary_stats
+    # Convert to DataFrame and set index to maintain order
+    if stats_data:
+        stats_df = pd.DataFrame(stats_data)
+        stats_df.set_index('diagnosis', inplace=True)
+    else:
+        stats_df = pd.DataFrame()
+
+    return fig, stats_df
 
 def plot_correlation_by_diagnosis_plotly(df_filtered, data_column1, data_column2):
     """
@@ -317,8 +331,95 @@ def plot_correlation_by_diagnosis_plotly(df_filtered, data_column1, data_column2
     fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.1)')
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.1)')
 
-    return fig
-# # End of functions for plotting
+    # Create ordered statistics dataframes
+    stats_data1 = []
+    stats_data2 = []
+    for dx in diagnosis_order:
+        subset = df_filtered[df_filtered['DX'] == dx]
+        
+        # Get statistics for first column
+        values1 = subset[data_column1].dropna()
+        if len(values1) > 0:
+            stats1 = values1.describe().to_dict()
+            stats1['diagnosis'] = dx
+            stats_data1.append(stats1)
+            
+        # Get statistics for second column
+        values2 = subset[data_column2].dropna()
+        if len(values2) > 0:
+            stats2 = values2.describe().to_dict()
+            stats2['diagnosis'] = dx
+            stats_data2.append(stats2)
+    
+    # Convert to DataFrames and set index to maintain order
+    if stats_data1:
+        stats_df1 = pd.DataFrame(stats_data1)
+        stats_df1.set_index('diagnosis', inplace=True)
+    else:
+        stats_df1 = pd.DataFrame()
+        
+    if stats_data2:
+        stats_df2 = pd.DataFrame(stats_data2)
+        stats_df2.set_index('diagnosis', inplace=True)
+    else:
+        stats_df2 = pd.DataFrame()
+
+    return fig, stats_df1, stats_df2
+# End of functions for plotting
+
+# Image/Data Export functions
+import base64
+from io import BytesIO
+
+def get_image_download_link(fig, filename, text):
+    """
+    Generates a link to download the plotly figure as a PNG image
+    
+    Parameters:
+    -----------
+    fig : plotly.graph_objects.Figure
+        The plotly figure to download
+    filename : str
+        The name of the file to download
+    text : str
+        The text to display on the download link
+        
+    Returns:
+    --------
+    download_link : str
+        The HTML link to download the image
+    """
+    # Convert plot to PNG
+    img_bytes = fig.to_image(format="png", engine="kaleido")
+    
+    # Encode the image to base64 string
+    b64 = base64.b64encode(img_bytes).decode()
+    href = f'<a download="{filename}" href="data:image/png;base64,{b64}">{text}</a>'
+    return href
+
+def get_csv_download_link(df, filename, text):
+    """
+    Generates a link to download the dataframe as a CSV file
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The dataframe to download
+    filename : str
+        The name of the file to download
+    text : str
+        The text to display on the download link
+        
+    Returns:
+    --------
+    download_link : str
+        The HTML link to download the CSV
+    """
+    csv = df.to_csv(index=True)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a download="{filename}" href="data:file/csv;base64,{b64}">{text}</a>'
+    return href
+# # done with functions #
 
 # Page config
 st.set_page_config(page_title="ADNI: Visualized", layout="wide")
@@ -334,9 +435,6 @@ def load_processed_data():
 
 # Get all DataFrames - will only run once
 df_main, df_filtered, df_cbf, df_cbf_logical, df_filtered_logical, df_filtered_forCN, df_filtered_forMCI, df_filtered_forRecovery = load_processed_data()
-
-# Create sidebar for datasets
-st.sidebar.header('Dataset Selection')
 
 # Add a section for dataset selection
 st.subheader('Select Dataset to Visualize')
@@ -377,6 +475,8 @@ with col1:
 
 # Display the description in the second column
 with col2:
+    # Add an invisible element that takes up the same space as the label
+    st.write("")  # This creates spacing equivalent to the label height
     st.info(dataset_options[selected_dataset])
 
 # Get the selected dataframe
@@ -424,9 +524,29 @@ with tab1:
             # Display the summary statistics as a nice table
             st.subheader(f'Summary Statistics for {selected_column}')
             
-            # Convert summary stats to a DataFrame for better display
-            stats_df = pd.DataFrame.from_dict(summary_stats, orient='index')
-            st.dataframe(stats_df)
+            # Display the summary statistics as a nice table
+            st.subheader(f'Summary Statistics for {selected_column} by Diagnosis')
+            st.dataframe(summary_stats)
+
+            # Export options
+            col1, col2 = st.columns(2)
+            with col1:
+                # Add download link for the plot
+                plot_link = get_image_download_link(
+                    fig, 
+                    f"dot_plot_{selected_column}.png", 
+                    "Download Plot as PNG"
+                )
+                st.markdown(plot_link, unsafe_allow_html=True)
+            
+            with col2:
+                # Add download link for the stats
+                stats_link = get_csv_download_link(
+                    summary_stats, 
+                    f"stats_{selected_column}.csv", 
+                    "Download Statistics as CSV"
+                )
+                st.markdown(stats_link, unsafe_allow_html=True)
     else:
         st.warning("The selected dataset doesn't contain diagnosis information (DX column) required for this visualization.")
 
@@ -450,12 +570,32 @@ with tab2:
             st.subheader(f'Distribution of {selected_column} by Diagnosis')
             
             # Create and display the plotly figure
-            fig = plot_distribution_by_diagnosis_plotly(selected_df, selected_column)
+            fig, summary_stats = plot_distribution_by_diagnosis_plotly(selected_df, selected_column)
             st.plotly_chart(fig, use_container_width=True)
             
-            # Display summary statistics
+            # Display the summary statistics as a nice table
             st.subheader(f'Summary Statistics for {selected_column} by Diagnosis')
-            st.dataframe(selected_df.groupby('DX')[selected_column].describe())
+            st.dataframe(summary_stats)
+
+            # Export options
+            col1, col2 = st.columns(2)
+            with col1:
+                # Add download link for the plot
+                plot_link = get_image_download_link(
+                    fig, 
+                    f"histogram_{selected_column}.png", 
+                    "Download Plot as PNG"
+                )
+                st.markdown(plot_link, unsafe_allow_html=True)
+            
+            with col2:
+                # Add download link for the stats
+                stats_link = get_csv_download_link(
+                    summary_stats, 
+                    f"stats_histogram_{selected_column}.csv", 
+                    "Download Statistics as CSV"
+                )
+                st.markdown(stats_link, unsafe_allow_html=True)
     else:
         st.warning('The selected dataset does not have the required columns for this visualization.')
 
@@ -487,14 +627,46 @@ with tab3:
             st.subheader(f'Correlation of {selected_column1} by {selected_column2}, by Diagnosis')
             
             # Create and display the plotly figure
-            fig = plot_correlation_by_diagnosis_plotly(selected_df, selected_column1, selected_column2)
+            fig, stats1_df, stats2_df = plot_correlation_by_diagnosis_plotly(selected_df, selected_column1, selected_column2)
             st.plotly_chart(fig, use_container_width=True)
             
-            # Display summary statistics 1
-            st.subheader(f'Summary Statistics for {selected_column1} by Diagnosis')
-            st.dataframe(selected_df.groupby('DX')[selected_column1].describe())
-            # Display summary statistics 2
-            st.subheader(f'Summary Statistics for {selected_column2} by Diagnosis')
-            st.dataframe(selected_df.groupby('DX')[selected_column2].describe())
+            # Display the summary statistics as nice tables
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader(f'Statistics for {selected_column1}')
+                st.dataframe(stats1_df)
+            with col2:
+                st.subheader(f'Statistics for {selected_column2}')
+                st.dataframe(stats2_df)
+            
+            # Export options
+                st.subheader("Export Options")
+                # Plot export
+                plot_link = get_image_download_link(
+                    fig, 
+                    f"correlation_{selected_column1}_{selected_column2}.png", 
+                    "Download Plot as PNG"
+                )
+                st.markdown(plot_link, unsafe_allow_html=True)
+                
+                # Stats export
+                col1, col2 = st.columns(2)
+                with col1:
+                    stats1_link = get_csv_download_link(
+                        stats1_df, 
+                        f"stats_{selected_column1}.csv", 
+                        f"Download {selected_column1} Statistics as CSV"
+                    )
+                    st.markdown(stats1_link, unsafe_allow_html=True)
+                
+                with col2:
+                    stats2_link = get_csv_download_link(
+                        stats2_df, 
+                        f"stats_{selected_column2}.csv", 
+                        f"Download {selected_column2} Statistics as CSV"
+                    )
+                    st.markdown(stats2_link, unsafe_allow_html=True)
     else:
         st.warning('The selected dataset does not have the required columns for this visualization.')
+
+# To run: streamlit run VisualizeADNIApp.py
