@@ -412,8 +412,8 @@ def process_all_data():
     filtered_df_forCN = filtered_df[filtered_df['Progression'].isin(['StableCN', 'CNtoMCI'])]
     # Dataset 2: StableMCI and MCItoDementia patients
     filtered_df_forMCI = filtered_df[filtered_df['Progression'].isin(['StableMCI', 'MCItoDementia'])]
-    # Dataset 3: MCIRecovery patients
-    filtered_df_forRecovery = filtered_df[filtered_df['Progression'] == 'MCIRecovery']
+    # Dataset 3: StableMCI and MCIRecovery
+    filtered_df_forRecovery = filtered_df[filtered_df['Progression'].isin(['StableMCI', 'MCIrecovery'])]
 
     return (final_df, filtered_df, filtered_cbf, filtered_cbf_logical,filtered_df_logical,\
             filtered_df_forCN,filtered_df_forMCI,filtered_df_forRecovery)
